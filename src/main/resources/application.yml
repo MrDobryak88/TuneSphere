@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: tunesphere
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tunesphere
+    username: postgres
+    password: 54368
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show_sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: tunesphere-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.tunesphere.event
+  server:
+    port: 8080
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics,prometheus
+    endpoint:
+      health:
+        show-details: always
+    metrics:
+      tags:
+        application: ${spring.application.name}
+# JWT настройки
+jwt:
+  secret: your-super-secret-key-at-least-256-bits-long-here-change-in-prod
+  expiration: 86400000   # 24 часа в миллисекундах
+  refresh-expiration: 604800000  # 7 дней
