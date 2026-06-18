@@ -1,37 +1,63 @@
 package com.tunesphere.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Entity
-@Table
+@Table(name = "Users")
 @Getter
 @Setter
 @SuperBuilder // Используем билдер который использует поля родителя
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = true) // Чтобы equals/hashCode учитывали поля из BaseEntity
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true) // Чтобы equals/hashCode учитывали поля из BaseEntity
 @ToString(callSuper = true) // Чтобы toString включал id, createdAt и updatedAt
 
 public class User extends BaseEntity{
 
-    @Column
+    @Column(nullable = false,unique = true,length = 50)
     private String username;
 
-    @Column
+    @Column(nullable = false,unique = true,length = 100)
     private String email;
 
-    @Column
+    @Column(nullable = false,length = 255)
     private String password;
 
-    @Column
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Role role;
 
-    @Column
+    @Column(name = "avatar_url")
     private String avatarUrl;
+
+    @ManyToMany
+    @JoinTable(
+            name = "user_liked_songs",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "song_id")
+    )
+    private Set<Song> likesSong;
+    @ManyToMany
+    @JoinTable(
+            name = "user_favorite_songs",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "song_id")
+    )
+    private Set<Song> favoriteSongs = new HashSet<>();
+
+    @ManyToMany
+    @JoinTable(
+            name = "user_followed_artists",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "artist_id")
+    )
+    private Set<Artist> followedArtists = new HashSet<>();
 
 
 
