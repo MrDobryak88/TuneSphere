@@ -28,7 +28,7 @@ public class Song extends BaseEntity{
     @Column(nullable = false)
     private Integer duration;
 
-    @Column
+    @Column(nullable = false)
     private String audioUrl;
 
     @Column
