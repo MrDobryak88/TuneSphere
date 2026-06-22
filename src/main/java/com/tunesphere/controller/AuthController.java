@@ -11,14 +11,14 @@ import org.springframework.security.authentication.AuthenticationManager; // Д�
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/api/v1/music")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
     private final AuthenticationManager authenticationManager; // Внедряем менеджер сюда
 
-    @PostMapping("/register")
+    @PostMapping("/{name}")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }

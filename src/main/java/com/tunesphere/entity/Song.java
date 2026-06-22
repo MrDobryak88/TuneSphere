@@ -1,40 +1,60 @@
 package com.tunesphere.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
-@Table(name = "Songs")
+@Table(name = "songs")
 @Getter
 @Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class Song extends BaseEntity{
+public class Song extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "artist_id", nullable = false)
-    private Artist artist;
+    @ManyToMany(fetch = FetchType.LAZY)
+@JoinTable(
+        name = "artists_songs",
+        joinColumns = @JoinColumn(name = "song_id"),
+        inverseJoinColumns = @JoinColumn(name = "artist_id")
+)
+    private Set<Artist> artists;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "album_id")
     private Album album;
-    @Column(nullable = false,length = 100)
+
+
+    @ManyToMany(mappedBy = "songs", fetch = FetchType.LAZY)
+    private Set<Playlist> playlists =  new HashSet<>();
+
+    @Column(nullable = false, length = 200)
     private String title;
 
     @Column(nullable = false)
-    private Integer duration;
+    @Positive
+    private Integer duration; // в секундах
 
-    @Column(nullable = false)
+    @Column(name = "audio_url", nullable = false, length = 500)
     private String audioUrl;
 
-    @Column
-    private Long playCount;
+    @Column(name = "cover_url", length = 500)
+    private String coverUrl;
 
-    @Column
+    @Column(name = "play_count", nullable = false)
+    private Long playCount = 0L;
+    @Column(name = "lyrics",length = 2000)
+    private String lyrics;
+    @Column(length = 50)
     private String genre;
 
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
 }

@@ -1,33 +1,51 @@
 package com.tunesphere.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "Artists")
+@Table(name = "artists")
 @Getter
 @Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class Artist extends BaseEntity{
-    @Column(nullable = false,length = 50)
+public class Artist extends BaseEntity {
+
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false,length = 1000)
+    @Column(length = 2000)
     private String bio;
 
-    @OneToMany(mappedBy = )
-    private Set<Song> song;
+    @Column(name = "avatar_url", length = 200)
+    private String avatarUrl;
 
-    private Long countFollowers;
+    private Role role = Role.ARTIST;
 
+    @Email
+    @NotBlank
+    @Column(unique = true)
+    private String email;
+
+    @NotBlank
+    @Column(unique = true)
+    private String phone;
+
+    @ManyToMany(mappedBy = "artists")
+    private Set<Album> albums = new HashSet<>();
+
+    @ManyToMany(mappedBy = "artists", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private Set<Song> songs = new HashSet<>();
+
+    @Column(name = "followers_count", nullable = false)
+    private Long followersCount = 0L;
 }
