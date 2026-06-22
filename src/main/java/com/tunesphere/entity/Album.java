@@ -5,7 +5,6 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -26,14 +25,13 @@ public class Album extends BaseEntity {
     private String title;
 
     @Column()
-    @Size(min = 3,max = 2000, message = "Описание должно содержать от 3 до 2000 символов")
+    @Size(min = 3, max = 2000, message = "Описание должно содержать от 3 до 2000 символов")
     private String description;
 
     @Column(name = "release_year")
-    @NotNull
-    @NotBlank
-    @FutureOrPresent(message = "Нельзя выпустить трек в прошлом ")
-    private LocalDateTime releaseDate;
+    @Min(value = 1900, message = "Год выпуска не может быть раньше 1900")
+    @Max(value = 2100, message = "Год выпуска не может быть позже 2100")
+    private Integer releaseYear;
 
     @Column(name = "cover_url", length = 500)
     private String coverUrl;
@@ -47,6 +45,6 @@ public class Album extends BaseEntity {
     private Set<Artist> artists = new HashSet<>();
 
     @ToString.Exclude
-    @OneToMany(mappedBy = "album", fetch = FetchType.LAZY,cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "album", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private Set<Song> songs = new HashSet<>();
 }

@@ -38,4 +38,17 @@ public class SongController {
     public ResponseEntity<SongResponse> getSongById(@PathVariable Long id) {
         return ResponseEntity.ok(songService.getSongById(id));
     }
+
+    @PostMapping("/{id}/play")
+    public ResponseEntity<Void> recordPlay(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String username) {
+        songService.incrementPlayCount(
+                id,
+                userId != null ? userId : 0L,
+                username != null ? username : "anonymous"
+        );
+        return ResponseEntity.ok().build();
+    }
 }

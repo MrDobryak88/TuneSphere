@@ -17,15 +17,13 @@ public class SongRequest {
     @NotBlank
     private String title;
 
-    @NotNull
     private Long artistId;
 
     private Long albumId;
 
     @Positive
-    private Integer duration;
+    private Integer duration = 1;
 
-    @NotBlank
     private String audioUrl;
 
     private String coverUrl;

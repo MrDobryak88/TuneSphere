@@ -1,28 +1,24 @@
 # ==========================================
-# ЭТАП 1: Сборка приложения (Используем чистую Java 25)
+# ЭТАП 1: Сборка приложения
 # ==========================================
-FROM eclipse-temurin:25-jdk-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 
 WORKDIR /app
 
-COPY .mvn/ .mvn
-COPY mvnw pom.xml ./
-
-
-RUN ./mvnw dependency:go-offline -B
+COPY pom.xml ./
+RUN mvn dependency:go-offline -B
 
 COPY src ./src
 
-RUN ./mvnw clean package -DskipTests
+RUN mvn clean package -DskipTests
 
 # ==========================================
-# ЭТАП 2: Запуск приложения (Остается легким)
+# ЭТАП 2: Запуск приложения
 # ==========================================
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Копируем собранный jar
 COPY --from=builder /app/target/*.jar app.jar
 
 EXPOSE 8080

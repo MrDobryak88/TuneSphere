@@ -35,7 +35,8 @@ public class ArtistServiceImpl implements ArtistService {
                 .id(artist.getId())
                 .name(artist.getName())
                 .bio(artist.getBio())
-                .avatarUrl(artist.getAvatarUrl() != null ? "/uploads/avatars/" + artist.getAvatarUrl() : null)
+                .avatarUrl(artist.getAvatarUrl())
+                .followersCount(artist.getFollowersCount())
                 .build();
     }
 }

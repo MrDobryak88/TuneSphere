@@ -7,9 +7,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface SongRepository extends JpaRepository<Song, Long> {
+
+    @Query("SELECT DISTINCT s FROM Song s LEFT JOIN FETCH s.artists")
+    List<Song> findAllWithArtists();
+
+    @Query("SELECT s FROM Song s LEFT JOIN FETCH s.artists WHERE s.id = :id")
+    Optional<Song> findByIdWithArtists(Long id);
+
+    @Query("SELECT s.id, a.name FROM Song s LEFT JOIN s.artists a")
+    List<Object[]> findSongArtistNames();
 
     List<Song> findByArtistsId(Long artistId);   // ← важно!
 

@@ -20,12 +20,12 @@ import java.util.Set;
 public class Song extends BaseEntity {
 
     @ManyToMany(fetch = FetchType.LAZY)
-@JoinTable(
-        name = "artists_songs",
-        joinColumns = @JoinColumn(name = "song_id"),
-        inverseJoinColumns = @JoinColumn(name = "artist_id")
-)
-    private Set<Artist> artists;
+    @JoinTable(
+            name = "songs_artists",
+            joinColumns = @JoinColumn(name = "song_id"),
+            inverseJoinColumns = @JoinColumn(name = "artist_id")
+    )
+    private Set<Artist> artists = new HashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "album_id")
