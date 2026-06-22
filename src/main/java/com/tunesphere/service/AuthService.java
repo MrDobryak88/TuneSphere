@@ -8,35 +8,30 @@ import com.tunesphere.entity.User;
 import com.tunesphere.repository.UserRepository;
 import com.tunesphere.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager; // Оставляем импорт
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthService implements UserDetailsService {
+public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    // УБРАЛИ ПОЛЕ authenticationManager ОТСЮДА!
+    private final AuthenticationManager authenticationManager;
 
-    @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
-    }
-
+    @Transactional
     public String register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new RuntimeException("Username already taken");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already registered");
+            throw new RuntimeException("Email already taken");
         }
 
         User user = User.builder()
@@ -47,21 +42,22 @@ public class AuthService implements UserDetailsService {
                 .build();
 
         userRepository.save(user);
-        return "User registered successfully";
+        return "User registered successfully!";
     }
 
-    // ТЕПЕРЬ ПЕРЕДАЕМ AuthenticationManager СЮДА ПАРАМЕТРОМ
     public JwtResponse login(LoginRequest request, AuthenticationManager authenticationManager) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+        Authentication authentication = this.authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail(), request.getPassword())
         );
 
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-        String accessToken = jwtTokenProvider.generateAccessToken(user);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
+        String token = jwtTokenProvider.generateAccessToken(userDetails);
 
-        return new JwtResponse(accessToken, refreshToken, user.getUsername(), user.getRole().name());
+        return JwtResponse.builder()
+                .accessToken(token)
+                .username(userDetails.getUsername())
+                .role(userDetails.getAuthorities().iterator().next().getAuthority())
+                .build();
     }
 }

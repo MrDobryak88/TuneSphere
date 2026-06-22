@@ -7,25 +7,25 @@ import com.tunesphere.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager; // Добавили импорт
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/music")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final AuthService authService;
-    private final AuthenticationManager authenticationManager; // Внедряем менеджер сюда
+    private final AuthenticationManager authenticationManager;
 
-    @PostMapping("/{name}")
+    @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
     }
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest request) {
-        // Передаем менеджер в метод сервиса
         return ResponseEntity.ok(authService.login(request, authenticationManager));
     }
 }

@@ -29,16 +29,6 @@ public class Artist extends BaseEntity {
     @Column(name = "avatar_url", length = 200)
     private String avatarUrl;
 
-    private Role role = Role.ARTIST;
-
-    @Email
-    @NotBlank
-    @Column(unique = true)
-    private String email;
-
-    @NotBlank
-    @Column(unique = true)
-    private String phone;
 
     @ManyToMany(mappedBy = "artists")
     private Set<Album> albums = new HashSet<>();
@@ -48,4 +38,13 @@ public class Artist extends BaseEntity {
 
     @Column(name = "followers_count", nullable = false)
     private Long followersCount = 0L;
+    public void addSong(Song song) {
+        this.songs.add(song);
+        song.getArtists().add(this);
+    }
+
+    public void removeSong(Song song) {
+        this.songs.remove(song);
+        song.getArtists().remove(this);
+    }
 }

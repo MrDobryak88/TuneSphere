@@ -1,22 +1,27 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: tunesphere
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/tunesphere
+    url: jdbc:postgresql://postgres:5432/tunesphere
     username: postgres
     password: 54368
+    driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
-      ddl-auto: none
-    show_sql: true
-    properties:
-      hibernate:
-        format_sql: true
+      ddl-auto: update
+    show-sql: true
+
   flyway:
     enabled: true
     baseline-on-migrate: true
+
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:29092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -26,23 +31,19 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.tunesphere.event
-  server:
-    port: 8080
+        spring.json.trusted.packages: "com.tunesphere.event"
+        spring.json.type.mapping: "SongPlayedEvent:com.tunesphere.event.SongPlayedEvent"
 
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info,metrics,prometheus
-    endpoint:
-      health:
-        show-details: always
-    metrics:
-      tags:
-        application: ${spring.application.name}
-# JWT настройки
+# ==================== JWT ====================
 jwt:
-  secret: your-super-secret-key-at-least-256-bits-long-here-change-in-prod
-  expiration: 86400000   # 24 часа в миллисекундах
-  refresh-expiration: 604800000  # 7 дней
+  secret: "superSecretKeyForTuneSphere2026ChangeMeInProduction1234567890abcdef"
+  expiration: 86400000
+  refresh-expiration: 604800000   # 7 дней
+
+# ==================== Uploads ====================
+app:
+  upload:
+    base-dir: /app/uploads
+    songs-dir: ${app.upload.base-dir}/songs
+    covers-dir: ${app.upload.base-dir}/covers
+    avatars-dir: ${app.upload.base-dir}/avatars

@@ -38,14 +38,13 @@ public class Album extends BaseEntity {
     @Column(name = "cover_url", length = 500)
     private String coverUrl;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany
     @JoinTable(
-            name = "artist_id",
+            name = "album_artists",
             joinColumns = @JoinColumn(name = "album_id"),
-            inverseJoinColumns = @JoinColumn(name = "artist_id" )
+            inverseJoinColumns = @JoinColumn(name = "artist_id")
     )
-    @ToString.Exclude
-    private Set<Artist> artists;
+    private Set<Artist> artists = new HashSet<>();
 
     @ToString.Exclude
     @OneToMany(mappedBy = "album", fetch = FetchType.LAZY,cascade = CascadeType.ALL)

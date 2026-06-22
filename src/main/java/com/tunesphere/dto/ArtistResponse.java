@@ -9,9 +9,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class JwtResponse {
-    private String accessToken;
-    private String refreshToken;
-    private String username;
-    private String role;
+public class ArtistResponse {
+    private Long id;
+    private String name;
+    private String bio;
+    private String avatarUrl;
+    private Long followersCount;
 }
