@@ -41,5 +41,6 @@ public class Playlist extends BaseEntity {
             joinColumns = @JoinColumn(name = "playlist_id"),
             inverseJoinColumns = @JoinColumn(name = "song_id")
     )
+    @Builder.Default  // <-- ДОЛЖНО БЫТЬ ЗДЕСЬ
     private Set<Song> songs = new HashSet<>();
 }

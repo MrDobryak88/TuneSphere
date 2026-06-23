@@ -46,13 +46,15 @@ public class User extends BaseEntity implements UserDetails {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "song_id")
     )
-    private Set<Song> likesSong;
+    @Builder.Default
+    private Set<Song> likesSong = new HashSet<>(); ;
     @ManyToMany
     @JoinTable(
             name = "user_favorite_songs",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "song_id")
     )
+    @Builder.Default
     private Set<Song> favoriteSongs = new HashSet<>();
 
     @ManyToMany
@@ -61,6 +63,7 @@ public class User extends BaseEntity implements UserDetails {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "artist_id")
     )
+    @Builder.Default
     private Set<Artist> followedArtists = new HashSet<>();
 
 

@@ -42,6 +42,7 @@ public class Album extends BaseEntity {
             joinColumns = @JoinColumn(name = "album_id"),
             inverseJoinColumns = @JoinColumn(name = "artist_id")
     )
+    @Builder.Default  // <-- ДОБАВЬ
     private Set<Artist> artists = new HashSet<>();
 
     @ToString.Exclude

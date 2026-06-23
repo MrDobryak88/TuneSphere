@@ -19,22 +19,23 @@ import java.util.Set;
 @ToString(callSuper = true)
 public class Song extends BaseEntity {
 
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "album_id")
+    private Album album;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "songs_artists",
             joinColumns = @JoinColumn(name = "song_id"),
             inverseJoinColumns = @JoinColumn(name = "artist_id")
     )
+    @Builder.Default
     private Set<Artist> artists = new HashSet<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "album_id")
-    private Album album;
-
-
     @ManyToMany(mappedBy = "songs", fetch = FetchType.LAZY)
-    private Set<Playlist> playlists =  new HashSet<>();
-
+    @Builder.Default
+    private Set<Playlist> playlists = new HashSet<>();
     @Column(nullable = false, length = 200)
     private String title;
 

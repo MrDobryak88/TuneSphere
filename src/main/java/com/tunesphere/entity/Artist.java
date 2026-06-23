@@ -31,9 +31,11 @@ public class Artist extends BaseEntity {
 
 
     @ManyToMany(mappedBy = "artists")
+    @Builder.Default
     private Set<Album> albums = new HashSet<>();
 
     @ManyToMany(mappedBy = "artists", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Builder.Default  // <-- ДОБАВЬ
     private Set<Song> songs = new HashSet<>();
 
     @Column(name = "followers_count", nullable = false)

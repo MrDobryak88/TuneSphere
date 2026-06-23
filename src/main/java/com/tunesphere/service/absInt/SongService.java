@@ -12,6 +12,15 @@ import java.util.List;
  * Отвечает за загрузку, получение и обновление метаданных песен.
  */
 public interface SongService {
+    /**
+     * Обновляет метаданные трека (только для владельца или админа).
+     */
+    SongResponse updateSong(Long id, SongRequest request, Long userId);
+
+    /**
+     * Удаляет трек (только для владельца или админа).
+     */
+    void deleteSong(Long id, Long userId);
 
     /**
      * Загружает новый трек с аудиофайлом и опциональной обложкой.

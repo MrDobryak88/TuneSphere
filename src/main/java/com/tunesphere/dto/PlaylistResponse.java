@@ -4,8 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.Set;
+import java.util.List;
 
 @Data
 @Builder
@@ -13,9 +12,11 @@ import java.util.Set;
 @AllArgsConstructor
 public class PlaylistResponse {
     private Long id;
-    private String name;
+    private String title;
     private String description;
     private Boolean isPublic;
     private Long userId;
-    private Set<Long> songIds;
+    private String username;
+    private List<SongResponse> songs;
+    private Integer songCount;
 }

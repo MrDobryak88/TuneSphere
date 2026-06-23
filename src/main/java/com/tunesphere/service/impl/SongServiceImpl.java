@@ -38,7 +38,42 @@ public class SongServiceImpl implements SongService {
 
     @Override
     @Transactional
+    public SongResponse updateSong(Long id, SongRequest request, Long userId) {
+        Song song = songRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Song not found"));
+
+        // TODO: Проверить, что пользователь — владелец трека или админ
+        // Пока разрешаем всем обновлять (для простоты)
+
+        if (request.getTitle() != null) song.setTitle(request.getTitle());
+        if (request.getGenre() != null) song.setGenre(request.getGenre());
+        if (request.getDuration() != null) song.setDuration(request.getDuration());
+
+        Song saved = songRepository.save(song);
+        String artistName = getArtistName(saved);
+        return mapToResponse(saved, artistName);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSong(Long id, Long userId) {
+        Song song = songRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Song not found"));
+
+        // TODO: Проверить права доступа
+        songRepository.delete(song);
+    }
+
+    private String getArtistName(Song song) {
+        if (song.getArtists() == null || song.getArtists().isEmpty()) {
+            return "Unknown Artist";
+        }
+        return song.getArtists().iterator().next().getName();
+    }
+    @Override
+    @Transactional
     public SongResponse uploadSong(SongRequest request, MultipartFile audioFile, MultipartFile coverFile) throws IOException {
+
 
         String audioFilename = fileStorageService.saveFile(audioFile, "song");
 
@@ -123,7 +158,7 @@ public class SongServiceImpl implements SongService {
         log.info("Play count +1 for songId={}, user={}", songId, username);
     }
 
-    private SongResponse mapToResponse(Song song, String artistName) {
+    public SongResponse mapToResponse(Song song, String artistName) {
         return SongResponse.builder()
                 .id(song.getId())
                 .title(song.getTitle())

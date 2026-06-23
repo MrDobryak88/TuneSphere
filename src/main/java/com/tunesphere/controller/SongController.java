@@ -2,10 +2,13 @@ package com.tunesphere.controller;
 
 import com.tunesphere.dto.SongRequest;
 import com.tunesphere.dto.SongResponse;
+import com.tunesphere.security.CustomUserDetails;
 import com.tunesphere.service.impl.SongServiceImpl;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,8 +21,27 @@ import java.util.List;
 public class SongController {
 
     private final SongServiceImpl songService;
+    @PutMapping("/{id}")
+    public ResponseEntity<SongResponse> updateSong(
+            @PathVariable Long id,
+            @Valid @RequestBody SongRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
 
-    @PostMapping("/upload")
+        Long userId = userDetails.getId();
+        return ResponseEntity.ok(songService.updateSong(id, request, userId));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteSong(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        Long userId = userDetails.getId();
+        songService.deleteSong(id, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/upload", consumes = "multipart/form-data")
     public ResponseEntity<SongResponse> uploadSong(
             @ModelAttribute SongRequest request,
             @RequestParam("audio") MultipartFile audioFile,

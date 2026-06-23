@@ -52,3 +52,8 @@ app:
     songs-dir: ${app.upload.base-dir}/songs
     covers-dir: ${app.upload.base-dir}/covers
     avatars-dir: ${app.upload.base-dir}/avatars
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
