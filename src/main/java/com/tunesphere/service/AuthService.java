@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -44,9 +45,8 @@ public class AuthService {
         userRepository.save(user);
         return "User registered successfully!";
     }
-
     public JwtResponse login(LoginRequest request, AuthenticationManager authenticationManager) {
-        Authentication authentication = this.authenticationManager.authenticate(
+        Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail(), request.getPassword())
         );
 
@@ -54,10 +54,16 @@ public class AuthService {
 
         String token = jwtTokenProvider.generateAccessToken(userDetails);
 
+        // Получаем роль правильно
+        String role = userDetails.getAuthorities().stream()
+                .findFirst()
+                .map(GrantedAuthority::getAuthority)
+                .orElse("USER");
+
         return JwtResponse.builder()
                 .accessToken(token)
                 .username(userDetails.getUsername())
-                .role(userDetails.getAuthorities().iterator().next().getAuthority())
+                .role(role)
                 .build();
     }
 }

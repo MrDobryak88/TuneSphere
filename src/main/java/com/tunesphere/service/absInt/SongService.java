@@ -2,6 +2,7 @@ package com.tunesphere.service.absInt;
 
 import com.tunesphere.dto.SongRequest;
 import com.tunesphere.dto.SongResponse;
+import com.tunesphere.entity.User;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -30,7 +31,9 @@ public interface SongService {
      * @param coverFile обложка (опционально)
      * @return SongResponse с данными созданного трека
      */
-    SongResponse uploadSong(SongRequest request, MultipartFile audioFile, MultipartFile coverFile) throws IOException;
+     SongResponse uploadSong(SongRequest request, MultipartFile audioFile, MultipartFile coverFile, Long userId) throws IOException ;
+
+    List<SongResponse> getSongsByUser(Long userId);
 
     /**
      * Возвращает список всех доступных треков.

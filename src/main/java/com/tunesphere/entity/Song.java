@@ -33,6 +33,10 @@ public class Song extends BaseEntity {
     @Builder.Default
     private Set<Artist> artists = new HashSet<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
     @ManyToMany(mappedBy = "songs", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<Playlist> playlists = new HashSet<>();

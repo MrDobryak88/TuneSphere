@@ -130,7 +130,7 @@ public class UserInteractionServiceImpl implements UserInteractionService {
         return song.getArtists().iterator().next().getName();
     }
 
-    private ArtistResponse mapArtistToResponse(Artist artist) {
+    public ArtistResponse mapArtistToResponse(Artist artist) {
         return ArtistResponse.builder()
                 .id(artist.getId())
                 .name(artist.getName())

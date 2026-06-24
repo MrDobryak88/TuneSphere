@@ -141,7 +141,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         return mapToResponse(saved);
     }
 
-    private PlaylistResponse mapToResponse(Playlist playlist) {
+    public PlaylistResponse mapToResponse(Playlist playlist) {
         List<SongResponse> songs = playlist.getSongs() != null
                 ? playlist.getSongs().stream()
                 .map(song -> songService.mapToResponse(song, getArtistName(song)))

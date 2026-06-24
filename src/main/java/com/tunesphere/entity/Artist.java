@@ -28,6 +28,11 @@ public class Artist extends BaseEntity {
 
     @Column(name = "avatar_url", length = 200)
     private String avatarUrl;
+    // ===== ДОБАВЬ ЭТО ПОЛЕ =====
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+    // ============================
 
 
     @ManyToMany(mappedBy = "artists")

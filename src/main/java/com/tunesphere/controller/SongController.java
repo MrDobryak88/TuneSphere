@@ -40,14 +40,15 @@ public class SongController {
         songService.deleteSong(id, userId);
         return ResponseEntity.noContent().build();
     }
-
     @PostMapping(value = "/upload", consumes = "multipart/form-data")
     public ResponseEntity<SongResponse> uploadSong(
             @ModelAttribute SongRequest request,
             @RequestParam("audio") MultipartFile audioFile,
-            @RequestParam(value = "cover", required = false) MultipartFile coverFile) throws IOException {
+            @RequestParam(value = "cover", required = false) MultipartFile coverFile,
+            @AuthenticationPrincipal CustomUserDetails userDetails) throws IOException {
 
-        SongResponse response = songService.uploadSong(request, audioFile, coverFile);
+        Long userId = userDetails != null ? userDetails.getId() : null;
+        SongResponse response = songService.uploadSong(request, audioFile, coverFile, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

@@ -1,261 +1,544 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
+import { getMyActivity, getGlobalActivity } from './api';
 import {
-  fetchSongs,
-  fetchArtists,
-  login,
-  register,
-  uploadSong,
-  recordPlay,
-  mediaUrl,
-  createPlaylist,
-  getUserPlaylists,
-  getPlaylistById,
-  addSongToPlaylist,
-  removeSongFromPlaylist,
-  deletePlaylist,
-  likeSong,
-  unlikeSong,
-  getLikedSongs,
-  addToFavorites,
-  removeFromFavorites,
-  getFavoriteSongs,
-  followArtist,
-  unfollowArtist,
-  getFollowedArtists,
-  deleteSong,
+  login, register, logout, fetchSongs, fetchArtists, uploadSong,
+  updateSong, deleteSong, recordPlay, getMySongs, updateMySong,
+  deleteMySong, getMyProfile, updateMyProfile, uploadAvatar,
+  getAdminStats, adminDeleteSong, adminGetAllUsers, adminUpdateUserRole,
+  mediaUrl
 } from './api';
 import './App.css';
 
+// ===== AUTH HELPERS =====
 const AUTH_KEY = 'tunesphere_auth';
-
-function loadAuth() {
+const loadAuth = () => {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+  } catch { return null; }
+};
 
-function saveAuth(auth) {
+const saveAuth = (auth) => {
   if (auth) {
     localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
     localStorage.setItem('token', auth.accessToken);
   } else {
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem('token');
+    logout();
   }
-}
+};
 
-function formatDuration(seconds) {
-  if (!seconds) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+// ===== LAYOUT COMPONENT =====
+function Layout({ user, setUser, children }) {
+  const navigate = useNavigate();
+  const location = useLocation();
 
-function getAudioDuration(file) {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const audio = new Audio(url);
-    audio.addEventListener('loadedmetadata', () => {
-      const duration = Math.max(1, Math.round(audio.duration));
-      URL.revokeObjectURL(url);
-      resolve(duration);
-    });
-    audio.addEventListener('error', () => {
-      URL.revokeObjectURL(url);
-      resolve(1);
-    });
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+    navigate('/login');
+    toast.success('Вы вышли из системы');
+  };
+
+  const menuItems = [
+    { path: '/', label: '🏠 Главная', icon: '🏠', public: true },
+    { path: '/profile', label: '👤 Профиль', icon: '👤', auth: true },
+    { path: '/my-songs', label: '🎵 Мои песни', icon: '🎵', auth: true, roles: ['ARTIST', 'ADMIN'] },
+    { path: '/activity', label: '📊 Активность', icon: '📊', auth: true },
+    { path: '/settings', label: '⚙️ Настройки', icon: '⚙️', auth: true },
+    { path: '/admin', label: '🛡 Админ-панель', icon: '🛡', auth: true, roles: ['ADMIN'] },
+  ];
+
+  const visibleItems = menuItems.filter(item => {
+    if (item.public) return true;
+    if (!item.auth) return true;
+    if (!user) return false;
+    if (item.roles) return item.roles.includes(user.role);
+    return true;
   });
+
+  return (
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+          <span>♫</span>
+          <h2>TuneSphere</h2>
+        </div>
+        <nav>
+          {visibleItems.map(item => (
+            <a
+              key={item.path}
+              href={item.path}
+              onClick={(e) => { e.preventDefault(); navigate(item.path); }}
+              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        {user && (
+          <div className="sidebar-footer">
+            <div className="user-info">
+              <div className="avatar">
+                {user.avatarUrl ? <img src={mediaUrl(user.avatarUrl)} alt="" /> : user.username[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div className="username">{user.username}</div>
+                <div className="role">{user.role}</div>
+              </div>
+            </div>
+            <button onClick={handleLogout} className="btn-logout">Выйти</button>
+          </div>
+        )}
+      </aside>
+      <main className="main-content">
+        {children}
+      </main>
+    </div>
+  );
 }
 
-// ===== AUTH MODAL =====
-function AuthModal({ onClose, onSuccess }) {
+// ===== PROTECTED ROUTE =====
+function ProtectedRoute({ user, children, roles }) {
+  if (!user) return <Navigate to="/login" />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" />;
+  return children;
+}
+
+// ===== LOGIN PAGE =====
+function LoginPage({ setUser }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ username: '', email: '', password: '' });
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     try {
-      if (mode === 'login') {
-        const data = await login(form.username, form.password);
-        const auth = { ...data, id: null };
-        saveAuth(auth);
-        onSuccess(auth);
-        toast.success(`Welcome, ${data.username}!`);
-      } else {
+      if (mode === 'register') {
         await register(form.username, form.email, form.password);
-        const data = await login(form.username, form.password);
-        saveAuth(data);
-        onSuccess(data);
-        toast.success('Account created!');
+        toast.success('Аккаунт создан! Войдите.');
+        setMode('login');
+        return;
       }
-      onClose();
+      const data = await login(form.username, form.password);
+      saveAuth(data);
+      setUser(data);
+      toast.success(`Добро пожаловать, ${data.username}!`);
+      navigate('/');
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Auth failed';
-      toast.error(msg);
-    } finally {
-      setLoading(false);
+      toast.error(err.response?.data?.message || 'Ошибка входа');
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} type="button">×</button>
-        <h2>{mode === 'login' ? 'Sign in' : 'Create account'}</h2>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-logo">♫</div>
+        <h1>TuneSphere</h1>
+        <p className="login-subtitle">Музыкальный стриминг нового поколения</p>
+
         <div className="tabs">
-          <button
-            type="button"
-            className={mode === 'login' ? 'tab active' : 'tab'}
-            onClick={() => setMode('login')}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'tab active' : 'tab'}
-            onClick={() => setMode('register')}
-          >
-            Register
-          </button>
+          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Вход</button>
+          <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Регистрация</button>
         </div>
+
         <form onSubmit={handleSubmit} className="form">
-          <label>
-            Username
-            <input
-              required
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              placeholder="yourname"
-            />
-          </label>
+          <input
+            placeholder="Имя пользователя"
+            value={form.username}
+            onChange={e => setForm({...form, username: e.target.value})}
+            required
+          />
           {mode === 'register' && (
-            <label>
-              Email
-              <input
-                required
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="you@email.com"
-              />
-            </label>
-          )}
-          <label>
-            Password
             <input
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={e => setForm({...form, email: e.target.value})}
               required
-              type="password"
-              minLength={6}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="••••••"
             />
-          </label>
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Register'}
+          )}
+          <input
+            type="password"
+            placeholder="Пароль"
+            value={form.password}
+            onChange={e => setForm({...form, password: e.target.value})}
+            required
+          />
+          <button type="submit" className="btn btn-primary btn-full">
+            {mode === 'login' ? '🔐 Войти' : '✨ Создать аккаунт'}
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ===== HOME PAGE =====
+function HomePage({ user, onPlay, currentSong, isPlaying }) {
+  const [songs, setSongs] = useState([]);
+  const [artists, setArtists] = useState([]);
+  const [search, setSearch] = useState('');
+  const [showUpload, setShowUpload] = useState(false);
+
+  useEffect(() => {
+    Promise.all([fetchSongs(), fetchArtists()])
+      .then(([s, a]) => { setSongs(s); setArtists(a); })
+      .catch(err => toast.error('Не удалось загрузить данные'));
+  }, []);
+
+  const filtered = songs.filter(s =>
+    s.title?.toLowerCase().includes(search.toLowerCase()) ||
+    s.artistName?.toLowerCase().includes(search.toLowerCase()) ||
+    s.genre?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Удалить эту песню?')) return;
+    try {
+      await deleteSong(id);
+      toast.success('Песня удалена');
+      setSongs(songs.filter(s => s.id !== id));
+    } catch {
+      toast.error('Не удалось удалить');
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <h1>🎵 Каталог треков</h1>
+        {user && (
+          <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
+            ↑ Загрузить песню
+          </button>
+        )}
+      </div>
+
+      <input
+        className="search-input"
+        placeholder="🔍 Поиск по названию, артисту или жанру..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      {artists.length > 0 && (
+        <section className="section">
+          <h2>🎤 Артисты</h2>
+          <div className="artist-row">
+            {artists.map(a => (
+              <div key={a.id} className="artist-card">
+                <img src={mediaUrl(a.avatarUrl) || `https://api.dicebear.com/7.x/initials/svg?seed=${a.name}`} alt={a.name} />
+                <strong>{a.name}</strong>
+                <span>{a.followersCount?.toLocaleString()} подписчиков</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="section">
+        <h2>🎶 Все треки ({filtered.length})</h2>
+        {filtered.length === 0 ? (
+          <p className="empty">Треки не найдены</p>
+        ) : (
+          <div className="song-grid">
+            {filtered.map(song => (
+              <div key={song.id} className={`song-card ${currentSong?.id === song.id ? 'active' : ''}`}>
+                <div className="cover-wrap" onClick={() => onPlay(song)}>
+                  <img src={mediaUrl(song.coverUrl) || `https://picsum.photos/seed/${song.id}/300/300`} alt={song.title} />
+                  <button className="play-overlay">
+                    {currentSong?.id === song.id && isPlaying ? '❚❚' : '▶'}
+                  </button>
+                </div>
+                <div className="song-info">
+                  <h3>{song.title}</h3>
+                  <p>{song.artistName || 'Неизвестный артист'}</p>
+                  <div className="song-meta">
+                    <span>{song.genre || '—'}</span>
+                    <span>{song.playCount?.toLocaleString()} plays</span>
+                  </div>
+                  {user && (user.role === 'ADMIN' || (user.role === 'ARTIST' && song.userId === user.id)) && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(song.id)}>
+                      🗑️ Удалить
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showUpload && (
+        <UploadModal
+          artists={artists}
+          onClose={() => setShowUpload(false)}
+          onUploaded={() => {
+            fetchSongs().then(setSongs);
+            setShowUpload(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ===== UPLOAD MODAL =====
-function UploadModal({ artists, onClose, onUploaded }) {
-  const [form, setForm] = useState({ title: '', genre: '', artistId: '' });
+function UploadModal({ artists, onClose, onUploaded, user }) {
+  const [form, setForm] = useState({
+    title: '',
+    genre: '',
+    artistId: '',
+    description: ''
+  });
   const [audioFile, setAudioFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [audioPreview, setAudioPreview] = useState(null);
+  const [duration, setDuration] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Автоматическое определение длительности
+  useEffect(() => {
+    if (audioFile) {
+      const url = URL.createObjectURL(audioFile);
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        setDuration(Math.round(audio.duration));
+        setAudioPreview(url);
+      });
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [audioFile]);
+
+  // Если пользователь — артист, автоматически выбираем его
+  useEffect(() => {
+    if (user?.role === 'ARTIST' && artists.length > 0) {
+      // Ищем артиста, связанного с пользователем
+      const userArtist = artists.find(a => a.name === user.username);
+      if (userArtist) {
+        setForm(prev => ({ ...prev, artistId: userArtist.id }));
+      }
+    }
+  }, [user, artists]);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('audio/')) {
+        setAudioFile(file);
+        if (!form.title) {
+          setForm(prev => ({
+            ...prev,
+            title: file.name.replace(/\.[^/.]+$/, '')
+          }));
+        }
+      } else {
+        toast.error('Можно загружать только аудиофайлы');
+      }
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!audioFile) {
-      toast.error('Select an audio file');
+      toast.error('Выберите аудиофайл');
       return;
     }
     setLoading(true);
     try {
-      const duration = await getAudioDuration(audioFile);
       const data = new FormData();
       data.append('title', form.title);
       data.append('genre', form.genre || 'Other');
-      data.append('duration', String(duration));
+      data.append('duration', String(duration || 1));
       if (form.artistId) data.append('artistId', form.artistId);
+      if (form.description) data.append('description', form.description);
       data.append('audio', audioFile);
       if (coverFile) data.append('cover', coverFile);
 
       await uploadSong(data);
-      toast.success('Track uploaded!');
+      toast.success('🎵 Песня загружена!');
       onUploaded();
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Upload failed';
-      toast.error(msg);
+      toast.error(err.response?.data?.message || 'Ошибка загрузки');
     } finally {
       setLoading(false);
     }
   };
 
+  const formatDuration = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} type="button">×</button>
-        <h2>Upload track</h2>
+      <div className="modal modal-wide" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>🎵 Загрузить песню</h2>
+
         <form onSubmit={handleSubmit} className="form">
+          {/* Drag & Drop зона */}
+          <div
+            className={`drop-zone ${dragActive ? 'active' : ''} ${audioFile ? 'has-file' : ''}`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            onClick={() => document.getElementById('audio-input').click()}
+          >
+            {audioFile ? (
+              <div className="drop-zone-content">
+                <div className="audio-icon">🎵</div>
+                <div className="file-info">
+                  <strong>{audioFile.name}</strong>
+                  <span>{(audioFile.size / 1024 / 1024).toFixed(2)} MB • {formatDuration(duration)}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAudioFile(null);
+                    setAudioPreview(null);
+                    setDuration(0);
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div className="drop-zone-content">
+                <div className="upload-icon">📤</div>
+                <p><strong>Перетащите аудиофайл сюда</strong></p>
+                <p className="muted">или нажмите для выбора</p>
+                <p className="muted">MP3, WAV, FLAC до 50MB</p>
+              </div>
+            )}
+            <input
+              id="audio-input"
+              type="file"
+              accept="audio/*"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setAudioFile(file);
+                  if (!form.title) {
+                    setForm(prev => ({
+                      ...prev,
+                      title: file.name.replace(/\.[^/.]+$/, '')
+                    }));
+                  }
+                }
+              }}
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          {/* Превью аудио */}
+          {audioPreview && (
+            <div className="audio-preview">
+              <audio controls src={audioPreview} style={{ width: '100%' }} />
+            </div>
+          )}
+
           <label>
-            Title
+            Название
             <input
               required
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Track name"
+              onChange={e => setForm({...form, title: e.target.value})}
+              placeholder="Название трека"
             />
           </label>
+
+          <div className="form-row">
+            <label>
+              Жанр
+              <input
+                value={form.genre}
+                onChange={e => setForm({...form, genre: e.target.value})}
+                placeholder="Rock, Pop, Electronic..."
+                list="genres"
+              />
+              <datalist id="genres">
+                <option value="Rock" />
+                <option value="Pop" />
+                <option value="Electronic" />
+                <option value="Hip-Hop" />
+                <option value="Jazz" />
+                <option value="Classical" />
+                <option value="Synthwave" />
+                <option value="Lo-Fi" />
+              </datalist>
+            </label>
+
+            <label>
+              Артист
+              <select
+                value={form.artistId}
+                onChange={e => setForm({...form, artistId: e.target.value})}
+              >
+                <option value="">Не указан</option>
+                {artists.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label>
-            Genre
-            <input
-              value={form.genre}
-              onChange={(e) => setForm({ ...form, genre: e.target.value })}
-              placeholder="Synthwave, Electronic…"
+            Описание (опционально)
+            <textarea
+              value={form.description}
+              onChange={e => setForm({...form, description: e.target.value})}
+              placeholder="О чём эта песня..."
+              rows="2"
             />
           </label>
+
           <label>
-            Artist
-            <select
-              value={form.artistId}
-              onChange={(e) => setForm({ ...form, artistId: e.target.value })}
-            >
-              <option value="">No artist</option>
-              {artists.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            Обложка (опционально)
+            <div className="cover-upload">
+              {coverFile && (
+                <img
+                  src={URL.createObjectURL(coverFile)}
+                  alt="Preview"
+                  className="cover-preview"
+                />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => setCoverFile(e.target.files?.[0])}
+              />
+            </div>
           </label>
-          <label>
-            Audio file (MP3, WAV…)
-            <input
-              required
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <label>
-            Cover image (optional)
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Uploading…' : 'Upload'}
+
+          <button
+            type="submit"
+            className="btn btn-primary btn-full"
+            disabled={loading || !audioFile}
+          >
+            {loading ? '⏳ Загрузка...' : '📤 Загрузить песню'}
           </button>
         </form>
       </div>
@@ -263,599 +546,489 @@ function UploadModal({ artists, onClose, onUploaded }) {
   );
 }
 
-// ===== CREATE PLAYLIST MODAL =====
-function CreatePlaylistModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ title: '', description: '', isPublic: false });
-  const [loading, setLoading] = useState(false);
+// ===== PROFILE PAGE =====
+function ProfilePage({ user, setUser }) {
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    getMyProfile().then(setProfile).catch(() => toast.error('Не удалось загрузить профиль'));
+  }, []);
+
+  if (!profile) return <div className="loading">Загрузка...</div>;
+
+  return (
+    <div>
+      <h1>👤 Мой профиль</h1>
+      <div className="profile-card">
+        <div className="profile-avatar">
+          {profile.avatarUrl ? <img src={mediaUrl(profile.avatarUrl)} alt="" /> : profile.username[0].toUpperCase()}
+        </div>
+        <div className="profile-info">
+          <h2>{profile.username}</h2>
+          <p>{profile.email}</p>
+          <span className="role-badge">{profile.role}</span>
+        </div>
+      </div>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-value">{profile.songsCount}</div>
+          <div className="stat-label">Песен загружено</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{profile.playlistsCount}</div>
+          <div className="stat-label">Плейлистов</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== SETTINGS PAGE =====
+function SettingsPage({ user, setUser }) {
+  const [form, setForm] = useState({
+    username: user?.username || '',
+    email: user?.email || '',
+    password: '',
+    avatarUrl: user?.avatarUrl || ''
+  });
+  const [avatarFile, setAvatarFile] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     try {
-      await createPlaylist(form);
-      toast.success('Playlist created!');
-      onCreated();
-      onClose();
+      const data = { ...form };
+      if (!data.password) delete data.password;
+      const updated = await updateMyProfile(data);
+      setUser({ ...user, username: updated.username, email: updated.email, avatarUrl: updated.avatarUrl });
+      toast.success('Профиль обновлён!');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create playlist');
-    } finally {
-      setLoading(false);
+      toast.error(err.response?.data?.message || 'Ошибка обновления');
+    }
+  };
+
+  const handleAvatarUpload = async (e) => {
+    e.preventDefault();
+    if (!avatarFile) return;
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
+    try {
+      const res = await uploadAvatar(formData);
+      setUser({ ...user, avatarUrl: res.avatarUrl });
+      toast.success('Аватар обновлён!');
+    } catch {
+      toast.error('Не удалось загрузить аватар');
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} type="button">×</button>
-        <h2>Create Playlist</h2>
-        <form onSubmit={handleSubmit} className="form">
+    <div>
+      <h1>⚙️ Настройки</h1>
+      <div className="settings-section">
+        <h3>📷 Аватар</h3>
+        <form onSubmit={handleAvatarUpload} className="settings-form">
+          <input type="file" accept="image/*" onChange={e => setAvatarFile(e.target.files?.[0])} />
+          <button type="submit" className="btn btn-primary" disabled={!avatarFile}>Загрузить аватар</button>
+        </form>
+      </div>
+      <div className="settings-section">
+        <h3>👤 Личные данные</h3>
+        <form onSubmit={handleSubmit} className="settings-form">
           <label>
-            Title
-            <input
-              required
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="My Playlist"
-            />
+            Имя пользователя
+            <input value={form.username} onChange={e => setForm({...form, username: e.target.value})} />
           </label>
           <label>
-            Description
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Optional description"
-              rows="3"
-            />
+            Email
+            <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={form.isPublic}
-              onChange={(e) => setForm({ ...form, isPublic: e.target.checked })}
-            />
-            Public playlist
+            Новый пароль (оставьте пустым, чтобы не менять)
+            <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••" />
           </label>
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Creating…' : 'Create'}
-          </button>
+          <button type="submit" className="btn btn-primary">💾 Сохранить изменения</button>
         </form>
       </div>
     </div>
   );
 }
 
-// ===== ADD TO PLAYLIST MODAL =====
-function AddToPlaylistModal({ song, playlists, onClose, onAdded }) {
-  const handleAdd = async (playlistId) => {
+// ===== MY SONGS PAGE =====
+function MySongsPage() {
+  const [songs, setSongs] = useState([]);
+  const [editing, setEditing] = useState(null);
+
+  const load = () => getMySongs().then(setSongs).catch(() => toast.error('Не удалось загрузить'));
+  useEffect(() => { load(); }, []);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Удалить эту песню?')) return;
     try {
-      await addSongToPlaylist(playlistId, song.id);
-      toast.success(`Added to playlist!`);
-      onAdded();
-      onClose();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to add');
+      await deleteMySong(id);
+      toast.success('Удалено');
+      load();
+    } catch {
+      toast.error('Не удалось удалить');
+    }
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    try {
+      await updateMySong(editing.id, editing);
+      toast.success('Обновлено');
+      setEditing(null);
+      load();
+    } catch {
+      toast.error('Не удалось обновить');
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} type="button">×</button>
-        <h2>Add to Playlist</h2>
-        {playlists.length === 0 ? (
-          <p className="empty">No playlists yet. Create one first!</p>
-        ) : (
-          <div className="playlist-list">
-            {playlists.map((pl) => (
-              <div key={pl.id} className="playlist-item" onClick={() => handleAdd(pl.id)}>
-                <strong>{pl.title}</strong>
-                <span>{pl.songCount || 0} tracks</span>
+    <div>
+      <h1>🎵 Мои песни</h1>
+      {songs.length === 0 ? (
+        <p className="empty">У вас пока нет песен. Загрузите первую!</p>
+      ) : (
+        <div className="my-songs-list">
+          {songs.map(song => (
+            <div key={song.id} className="my-song-item">
+              <div className="my-song-info">
+                <strong>{song.title}</strong>
+                <div className="muted">{song.genre} • {song.playCount} прослушиваний</div>
               </div>
-            ))}
+              <div className="actions">
+                <button onClick={() => setEditing(song)} className="btn btn-ghost">✏️ Изменить</button>
+                <button onClick={() => handleDelete(song.id)} className="btn btn-danger">🗑️ Удалить</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setEditing(null)}>×</button>
+            <h2>Редактировать песню</h2>
+            <form onSubmit={handleUpdate} className="form">
+              <label>Название
+                <input value={editing.title} onChange={e => setEditing({...editing, title: e.target.value})} />
+              </label>
+              <label>Жанр
+                <input value={editing.genre || ''} onChange={e => setEditing({...editing, genre: e.target.value})} />
+              </label>
+              <div className="modal-actions">
+                <button type="button" onClick={() => setEditing(null)} className="btn btn-ghost">Отмена</button>
+                <button type="submit" className="btn btn-primary">💾 Сохранить</button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// ===== VIEW PLAYLIST MODAL =====
-function ViewPlaylistModal({ playlistId, onClose, onRefresh }) {
-  const [playlist, setPlaylist] = useState(null);
-  const [loading, setLoading] = useState(true);
+// Новая страница
+function ActivityPage({ user }) {
+  const [activities, setActivities] = useState([]);
+  const [tab, setTab] = useState('my');
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await getPlaylistById(playlistId);
-        setPlaylist(data);
+        const data = tab === 'my'
+          ? await getMyActivity()
+          : await getGlobalActivity();
+        setActivities(data);
       } catch {
-        toast.error('Failed to load playlist');
-      } finally {
-        setLoading(false);
+        toast.error('Не удалось загрузить активность');
       }
     };
     load();
-  }, [playlistId]);
+  }, [tab]);
 
-  const handleRemove = async (songId) => {
-    try {
-      await removeSongFromPlaylist(playlistId, songId);
-      toast.success('Removed from playlist');
-      const data = await getPlaylistById(playlistId);
-      setPlaylist(data);
-      onRefresh();
-    } catch {
-      toast.error('Failed to remove');
-    }
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = (now - date) / 1000;
+
+    if (diff < 60) return 'только что';
+    if (diff < 3600) return `${Math.floor(diff/60)} мин назад`;
+    if (diff < 86400) return `${Math.floor(diff/3600)} ч назад`;
+    return date.toLocaleDateString('ru-RU');
   };
-
-  const handleDelete = async () => {
-    if (!window.confirm('Delete this playlist?')) return;
-    try {
-      await deletePlaylist(playlistId);
-      toast.success('Playlist deleted');
-      onClose();
-      onRefresh();
-    } catch {
-      toast.error('Failed to delete');
-    }
-  };
-
-  if (loading) return <div className="modal-overlay"><div className="modal">Loading…</div></div>;
-  if (!playlist) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} type="button">×</button>
-        <h2>{playlist.title}</h2>
-        {playlist.description && <p className="muted">{playlist.description}</p>}
-        <button className="btn btn-ghost" onClick={handleDelete} style={{ marginBottom: '1rem' }}>
-          Delete Playlist
+    <div>
+      <h1> Активность</h1>
+
+      <div className="tabs" style={{ marginBottom: '1.5rem' }}>
+        <button className={tab === 'my' ? 'active' : ''} onClick={() => setTab('my')}>
+          👤 Моя активность
         </button>
-        {playlist.songs?.length === 0 ? (
-          <p className="empty">No tracks in this playlist</p>
-        ) : (
-          <div className="playlist-songs">
-            {playlist.songs?.map((song) => (
-              <div key={song.id} className="playlist-song-item">
-                <div>
-                  <strong>{song.title}</strong>
-                  <span className="muted">{song.artistName}</span>
-                </div>
-                <button className="btn btn-ghost" onClick={() => handleRemove(song.id)}>Remove</button>
-              </div>
-            ))}
-          </div>
-        )}
+        <button className={tab === 'global' ? 'active' : ''} onClick={() => setTab('global')}>
+          🌍 Общая лента
+        </button>
       </div>
+
+      {activities.length === 0 ? (
+        <p className="empty">
+          {tab === 'my' ? 'Вы ещё ничего не слушали' : 'Пока нет активности'}
+        </p>
+      ) : (
+        <div className="activity-list">
+          {activities.map(a => (
+            <div key={a.id} className="activity-item">
+              <div className="activity-icon">🎵</div>
+              <div className="activity-info">
+                <strong>{a.songTitle}</strong>
+                <span className="muted">{a.artistName}</span>
+                {tab === 'global' && (
+                  <span className="muted">• {a.username}</span>
+                )}
+              </div>
+              <div className="activity-time">{formatTime(a.createdAt)}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+// ===== ADMIN PAGE =====
+function AdminPage() {
+  const [stats, setStats] = useState(null);
+  const [songs, setSongs] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [activeTab, setActiveTab] = useState('songs');
+
+  useEffect(() => {
+    getAdminStats().then(setStats).catch(() => {});
+    fetchSongs().then(setSongs).catch(() => {});
+    adminGetAllUsers().then(setUsers).catch(() => {});
+  }, []);
+
+  const handleDeleteSong = async (id) => {
+    if (!window.confirm('Удалить песню (админ)?')) return;
+    try {
+      await adminDeleteSong(id);
+      toast.success('Удалено');
+      setSongs(songs.filter(s => s.id !== id));
+    } catch {
+      toast.error('Не удалось удалить');
+    }
+  };
+
+  const handleChangeRole = async (userId, newRole) => {
+    try {
+      await adminUpdateUserRole(userId, newRole);
+      toast.success('Роль изменена');
+      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    } catch {
+      toast.error('Не удалось изменить роль');
+    }
+  };
+
+  return (
+    <div>
+      <h1>🛡 Админ-панель</h1>
+
+      {stats && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-value">{stats.totalUsers}</div>
+            <div className="stat-label">Пользователей</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.totalSongs}</div>
+            <div className="stat-label">Песен</div>
+          </div>
+        </div>
+      )}
+
+      <div className="tabs" style={{ marginTop: '2rem' }}>
+        <button className={activeTab === 'songs' ? 'active' : ''} onClick={() => setActiveTab('songs')}>🎵 Песни</button>
+        <button className={activeTab === 'users' ? 'active' : ''} onClick={() => setActiveTab('users')}>👥 Пользователи</button>
+      </div>
+
+      {activeTab === 'songs' && (
+        <table className="admin-table">
+          <thead>
+            <tr><th>ID</th><th>Название</th><th>Артист</th><th>Прослушиваний</th><th>Действия</th></tr>
+          </thead>
+          <tbody>
+            {songs.map(s => (
+              <tr key={s.id}>
+                <td>{s.id}</td>
+                <td>{s.title}</td>
+                <td>{s.artistName}</td>
+                <td>{s.playCount}</td>
+                <td>
+                  <button onClick={() => handleDeleteSong(s.id)} className="btn btn-danger btn-sm">Удалить</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {activeTab === 'users' && (
+        <table className="admin-table">
+          <thead>
+            <tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Действия</th></tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id}>
+                <td>{u.id}</td>
+                <td>{u.username}</td>
+                <td>{u.email}</td>
+                <td><span className="role-badge">{u.role}</span></td>
+                <td>
+                  <select value={u.role} onChange={e => handleChangeRole(u.id, e.target.value)} className="role-select">
+                    <option value="USER">USER</option>
+                    <option value="ARTIST">ARTIST</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ===== PLAYER COMPONENT =====
+function Player({ currentSong, isPlaying, setIsPlaying, user }) {
+  const audioRef = useRef(new Audio());
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      setProgress((audio.currentTime / audio.duration) * 100);
+    };
+
+    const onLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const onEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('ended', onEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (currentSong) {
+      audioRef.current.src = mediaUrl(currentSong.audioUrl);
+      if (isPlaying) {
+        audioRef.current.play().catch(() => {});
+        if (user) recordPlay(currentSong.id, user).catch(() => {});
+      }
+    }
+  }, [currentSong]);
+
+  useEffect(() => {
+    if (isPlaying) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlaying]);
+
+  const handleSeek = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = percent * duration;
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  if (!currentSong) return null;
+
+  return (
+    <footer className="player">
+      <img src={mediaUrl(currentSong.coverUrl) || `https://picsum.photos/seed/${currentSong.id}/80/80`} alt="" className="player-cover" />
+      <div className="player-info">
+        <strong>{currentSong.title}</strong>
+        <span>{currentSong.artistName}</span>
+      </div>
+      <button className="player-btn" onClick={() => setIsPlaying(!isPlaying)}>
+        {isPlaying ? '❚❚' : '▶'}
+      </button>
+      <div className="progress-container">
+        <span className="time">{formatTime(currentTime)}</span>
+        <div className="progress-bar" onClick={handleSeek}>
+          <div className="progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="time">{formatTime(duration)}</span>
+      </div>
+    </footer>
   );
 }
 
 // ===== MAIN APP =====
-function App() {
-  const [songs, setSongs] = useState([]);
-  const [artists, setArtists] = useState([]);
+export default function App() {
   const [user, setUser] = useState(loadAuth);
-  const [search, setSearch] = useState('');
   const [currentSong, setCurrentSong] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [showAuth, setShowAuth] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [showAddToPlaylist, setShowAddToPlaylist] = useState(null);
-  const [showViewPlaylist, setShowViewPlaylist] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all'); // all, liked, favorites, playlists
-  const [likedSongs, setLikedSongs] = useState([]);
-  const [favoriteSongs, setFavoriteSongs] = useState([]);
-  const [followedArtists, setFollowedArtists] = useState([]);
-  const [userPlaylists, setUserPlaylists] = useState([]);
-  const [likedSongIds, setLikedSongIds] = useState(new Set());
-  const [favoriteSongIds, setFavoriteSongIds] = useState(new Set());
-  const [followedArtistIds, setFollowedArtistIds] = useState(new Set());
 
-  const audioRef = useRef(new Audio());
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [songsData, artistsData] = await Promise.all([fetchSongs(), fetchArtists()]);
-      setSongs(songsData);
-      setArtists(artistsData);
-    } catch {
-      toast.error('Failed to load catalog');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadUserData = useCallback(async () => {
-    if (!user) return;
-    try {
-      const [liked, favorites, followed, playlists] = await Promise.all([
-        getLikedSongs(),
-        getFavoriteSongs(),
-        getFollowedArtists(),
-        getUserPlaylists(user.id || 1), // TODO: fix userId
-      ]);
-      setLikedSongs(liked);
-      setFavoriteSongs(favorites);
-      setFollowedArtists(followed);
-      setUserPlaylists(playlists);
-      setLikedSongIds(new Set(liked.map(s => s.id)));
-      setFavoriteSongIds(new Set(favorites.map(s => s.id)));
-      setFollowedArtistIds(new Set(followed.map(a => a.id)));
-    } catch (err) {
-      console.error('Failed to load user data:', err);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    if (user) loadUserData();
-  }, [user, loadUserData]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    const onTime = () => {
-      if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
-    };
-    const onEnded = () => setIsPlaying(false);
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('ended', onEnded);
-    return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('ended', onEnded);
-      audio.pause();
-    };
-  }, []);
-
-  const playSong = async (song) => {
-    const audio = audioRef.current;
-    const url = mediaUrl(song.audioUrl);
-    if (currentSong?.id === song.id && isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-      return;
-    }
+  const handlePlay = (song) => {
     if (currentSong?.id === song.id) {
-      audio.play();
-      setIsPlaying(true);
-      return;
-    }
-    audio.src = url;
-    setCurrentSong(song);
-    setProgress(0);
-    try {
-      await audio.play();
-      setIsPlaying(true);
-      recordPlay(song.id, user).catch(() => {});
-    } catch {
-      toast.error('Cannot play this track');
-    }
-  };
-
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!currentSong) return;
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
+      setIsPlaying(!isPlaying);
     } else {
-      audio.play();
+      setCurrentSong(song);
       setIsPlaying(true);
     }
   };
-
-  const logout = () => {
-    saveAuth(null);
-    setUser(null);
-    setLikedSongIds(new Set());
-    setFavoriteSongIds(new Set());
-    setFollowedArtistIds(new Set());
-    toast.success('Signed out');
-  };
-
-  const handleLike = async (songId) => {
-    if (!user) { toast.error('Please sign in'); return; }
-    try {
-      if (likedSongIds.has(songId)) {
-        await unlikeSong(songId);
-        setLikedSongIds(prev => { const n = new Set(prev); n.delete(songId); return n; });
-        toast.success('Unliked');
-      } else {
-        await likeSong(songId);
-        setLikedSongIds(prev => new Set(prev).add(songId));
-        toast.success('Liked!');
-      }
-    } catch {
-      toast.error('Failed');
-    }
-  };
-
-  const handleFavorite = async (songId) => {
-    if (!user) { toast.error('Please sign in'); return; }
-    try {
-      if (favoriteSongIds.has(songId)) {
-        await removeFromFavorites(songId);
-        setFavoriteSongIds(prev => { const n = new Set(prev); n.delete(songId); return n; });
-        toast.success('Removed from favorites');
-      } else {
-        await addToFavorites(songId);
-        setFavoriteSongIds(prev => new Set(prev).add(songId));
-        toast.success('Added to favorites!');
-      }
-    } catch {
-      toast.error('Failed');
-    }
-  };
-
-  const handleFollow = async (artistId) => {
-    if (!user) { toast.error('Please sign in'); return; }
-    try {
-      if (followedArtistIds.has(artistId)) {
-        await unfollowArtist(artistId);
-        setFollowedArtistIds(prev => { const n = new Set(prev); n.delete(artistId); return n; });
-        toast.success('Unfollowed');
-      } else {
-        await followArtist(artistId);
-        setFollowedArtistIds(prev => new Set(prev).add(artistId));
-        toast.success('Following!');
-      }
-      loadUserData();
-    } catch {
-      toast.error('Failed');
-    }
-  };
-
-  const handleDeleteSong = async (songId) => {
-    if (!window.confirm('Delete this track?')) return;
-    try {
-      await deleteSong(songId);
-      toast.success('Track deleted');
-      loadData();
-    } catch {
-      toast.error('Failed to delete');
-    }
-  };
-
-  const filtered = songs.filter((s) => {
-    const q = search.toLowerCase();
-    return (
-      s.title?.toLowerCase().includes(q) ||
-      s.artistName?.toLowerCase().includes(q) ||
-      s.genre?.toLowerCase().includes(q)
-    );
-  });
-
-  const displayedSongs = activeTab === 'liked'
-    ? songs.filter(s => likedSongIds.has(s.id))
-    : activeTab === 'favorites'
-    ? songs.filter(s => favoriteSongIds.has(s.id))
-    : filtered;
 
   return (
-    <div className="app">
-      <Toaster position="top-center" toastOptions={{ className: 'toast' }} />
-
-      <header className="header">
-        <div className="brand">
-          <span className="brand-icon">♫</span>
-          <h1>TuneSphere</h1>
-        </div>
-        <div className="search-wrap">
-          <input
-            className="search"
-            placeholder="Search tracks, artists, genres…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="header-actions">
-          {user ? (
+    <BrowserRouter>
+      <Toaster position="top-center" />
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage setUser={setUser} />} />
+        <Route path="/*" element={
+          user ? (
             <>
-              <button className="btn btn-primary" type="button" onClick={() => setShowUpload(true)}>
-                ↑ Upload
-              </button>
-              <div className="user-chip">
-                <span className="user-avatar">{user.username[0]?.toUpperCase()}</span>
-                <span>{user.username}</span>
-                <span className="role-badge">{user.role}</span>
-              </div>
-              <button className="btn btn-ghost" type="button" onClick={logout}>Logout</button>
+              <Layout user={user} setUser={setUser}>
+                <Routes>
+                  <Route path="/" element={<HomePage user={user} onPlay={handlePlay} currentSong={currentSong} isPlaying={isPlaying} />} />
+                  <Route path="/profile" element={<ProtectedRoute user={user}><ProfilePage user={user} setUser={setUser} /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute user={user}><SettingsPage user={user} setUser={setUser} /></ProtectedRoute>} />
+                  <Route path="/my-songs" element={<ProtectedRoute user={user} roles={['ARTIST', 'ADMIN']}><MySongsPage /></ProtectedRoute>} />
+                  <Route path="/admin" element={<ProtectedRoute user={user} roles={['ADMIN']}><AdminPage /></ProtectedRoute>} />
+                  <Route path="/activity" element={
+                    <ProtectedRoute user={user}>
+                      <ActivityPage user={user} />
+                    </ProtectedRoute>
+                  } />
+                </Routes>
+              </Layout>
+              <Player currentSong={currentSong} isPlaying={isPlaying} setIsPlaying={setIsPlaying} user={user} />
             </>
-          ) : (
-            <button className="btn btn-primary" type="button" onClick={() => setShowAuth(true)}>
-              Sign in
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="main">
-        {user && (
-          <div className="tabs-section">
-            <button className={`tab ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All Tracks</button>
-            <button className={`tab ${activeTab === 'liked' ? 'active' : ''}`} onClick={() => setActiveTab('liked')}>❤️ Liked ({likedSongIds.size})</button>
-            <button className={`tab ${activeTab === 'favorites' ? 'active' : ''}`} onClick={() => setActiveTab('favorites')}>⭐ Favorites ({favoriteSongIds.size})</button>
-            <button className={`tab ${activeTab === 'playlists' ? 'active' : ''}`} onClick={() => setActiveTab('playlists')}>📋 Playlists ({userPlaylists.length})</button>
-          </div>
-        )}
-
-        {activeTab === 'playlists' ? (
-          <section className="section">
-            <div className="section-header">
-              <h2>My Playlists</h2>
-              <button className="btn btn-primary" onClick={() => setShowCreatePlaylist(true)}>+ Create</button>
-            </div>
-            {userPlaylists.length === 0 ? (
-              <p className="empty">No playlists yet. Create your first one!</p>
-            ) : (
-              <div className="playlist-grid">
-                {userPlaylists.map((pl) => (
-                  <div key={pl.id} className="playlist-card" onClick={() => setShowViewPlaylist(pl.id)}>
-                    <div className="playlist-icon">🎵</div>
-                    <strong>{pl.title}</strong>
-                    <span>{pl.songCount || 0} tracks</span>
-                    <span className="muted">{pl.isPublic ? 'Public' : 'Private'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        ) : (
-          <>
-            {artists.length > 0 && activeTab === 'all' && (
-              <section className="section">
-                <h2>Artists</h2>
-                <div className="artist-row">
-                  {artists.map((artist) => (
-                    <div key={artist.id} className="artist-card">
-                      <img
-                        src={mediaUrl(artist.avatarUrl) || `https://api.dicebear.com/7.x/initials/svg?seed=${artist.name}`}
-                        alt={artist.name}
-                      />
-                      <strong>{artist.name}</strong>
-                      <span>{artist.followersCount?.toLocaleString() ?? 0} followers</span>
-                      {user && (
-                        <button
-                          className={`btn ${followedArtistIds.has(artist.id) ? 'btn-ghost' : 'btn-primary'}`}
-                          onClick={() => handleFollow(artist.id)}
-                          style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
-                        >
-                          {followedArtistIds.has(artist.id) ? '✓ Following' : '+ Follow'}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className="section">
-              <h2>
-                {activeTab === 'all' && 'Tracks'}
-                {activeTab === 'liked' && 'Liked Tracks'}
-                {activeTab === 'favorites' && 'Favorite Tracks'}
-                {loading && <span className="muted">loading…</span>}
-              </h2>
-              {displayedSongs.length === 0 && !loading ? (
-                <p className="empty">
-                  {activeTab === 'all' ? 'No tracks found. Upload one or clear search.' : 'No tracks here yet.'}
-                </p>
-              ) : (
-                <div className="song-grid">
-                  {displayedSongs.map((song) => (
-                    <article
-                      key={song.id}
-                      className={`song-card ${currentSong?.id === song.id ? 'active' : ''}`}
-                    >
-                      <div className="cover-wrap" onClick={() => playSong(song)}>
-                        <img
-                          src={mediaUrl(song.coverUrl) || `https://picsum.photos/seed/${song.id}/300/300`}
-                          alt={song.title}
-                        />
-                        <button className="play-overlay" type="button" aria-label="Play">
-                          {currentSong?.id === song.id && isPlaying ? '❚❚' : '▶'}
-                        </button>
-                      </div>
-                      <div className="song-info">
-                        <h3>{song.title}</h3>
-                        <p>{song.artistName}</p>
-                        <div className="song-meta">
-                          <span>{song.genre || '—'}</span>
-                          <span>{formatDuration(song.duration)}</span>
-                          <span>{song.playCount?.toLocaleString() ?? 0} plays</span>
-                        </div>
-                        {user && (
-                          <div className="song-actions">
-                            <button
-                              className={`icon-btn ${likedSongIds.has(song.id) ? 'active' : ''}`}
-                              onClick={() => handleLike(song.id)}
-                              title="Like"
-                            >
-                              {likedSongIds.has(song.id) ? '❤️' : '🤍'}
-                            </button>
-                            <button
-                              className={`icon-btn ${favoriteSongIds.has(song.id) ? 'active' : ''}`}
-                              onClick={() => handleFavorite(song.id)}
-                              title="Favorite"
-                            >
-                              {favoriteSongIds.has(song.id) ? '⭐' : '☆'}
-                            </button>
-                            <button
-                              className="icon-btn"
-                              onClick={() => setShowAddToPlaylist(song)}
-                              title="Add to playlist"
-                            >
-                              📋
-                            </button>
-                            <button
-                              className="icon-btn"
-                              onClick={() => handleDeleteSong(song.id)}
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </main>
-
-      {currentSong && (
-        <footer className="player">
-          <img
-            src={mediaUrl(currentSong.coverUrl) || `https://picsum.photos/seed/${currentSong.id}/80/80`}
-            alt=""
-            className="player-cover"
-          />
-          <div className="player-info">
-            <strong>{currentSong.title}</strong>
-            <span>{currentSong.artistName}</span>
-          </div>
-          <button className="player-btn" type="button" onClick={togglePlay}>
-            {isPlaying ? '❚❚' : '▶'}
-          </button>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-        </footer>
-      )}
-
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={setUser} />}
-      {showUpload && user && <UploadModal artists={artists} onClose={() => setShowUpload(false)} onUploaded={loadData} />}
-      {showCreatePlaylist && user && <CreatePlaylistModal onClose={() => setShowCreatePlaylist(false)} onCreated={loadUserData} />}
-      {showAddToPlaylist && user && (
-        <AddToPlaylistModal
-          song={showAddToPlaylist}
-          playlists={userPlaylists}
-          onClose={() => setShowAddToPlaylist(null)}
-          onAdded={loadUserData}
-        />
-      )}
-      {showViewPlaylist && user && (
-        <ViewPlaylistModal
-          playlistId={showViewPlaylist}
-          onClose={() => setShowViewPlaylist(null)}
-          onRefresh={loadUserData}
-        />
-      )}
-    </div>
+          ) : <Navigate to="/login" />
+        } />
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;

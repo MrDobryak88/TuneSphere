@@ -11,10 +11,11 @@ import java.util.Optional;
 
 @Repository
 public interface SongRepository extends JpaRepository<Song, Long> {
-
+    long countByUserId(Long userId);
+    List<Song> findByUserId(Long userId);
+    void deleteByIdAndUserId(Long id, Long userId);
     @Query("SELECT DISTINCT s FROM Song s LEFT JOIN FETCH s.artists")
     List<Song> findAllWithArtists();
-
     @Query("SELECT s FROM Song s LEFT JOIN FETCH s.artists WHERE s.id = :id")
     Optional<Song> findByIdWithArtists(Long id);
 
