@@ -65,13 +65,12 @@ public class SongController {
     @PostMapping("/{id}/play")
     public ResponseEntity<Void> recordPlay(
             @PathVariable Long id,
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String username) {
-        songService.incrementPlayCount(
-                id,
-                userId != null ? userId : 0L,
-                username != null ? username : "anonymous"
-        );
+            @AuthenticationPrincipal CustomUserDetails userDetails) {   // ← Главное изменение
+
+        Long userId = userDetails != null ? userDetails.getId() : null;
+        String username = userDetails != null ? userDetails.getUsername() : "anonymous";
+
+        songService.incrementPlayCount(id, userId, username);
         return ResponseEntity.ok().build();
     }
 }

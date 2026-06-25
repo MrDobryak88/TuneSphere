@@ -105,9 +105,12 @@ public class SongServiceImpl implements SongService {
     public void incrementPlayCount(Long songId, Long userId, String username) {
         songRepository.incrementPlayCount(songId);
 
+        // Защита от нулевого userId
+        Long safeUserId = (userId != null && userId > 0) ? userId : null;
+
         SongPlayedEvent event = SongPlayedEvent.builder()
                 .songId(songId)
-                .userId(userId)
+                .userId(safeUserId)
                 .username(username)
                 .playedAt(LocalDateTime.now())
                 .build();
@@ -115,7 +118,6 @@ public class SongServiceImpl implements SongService {
         kafkaProducerService.sendSongPlayedEvent(event);
         log.info("Play count +1 for songId={}, user={}", songId, username);
     }
-
     @Override
     @Transactional
     public SongResponse updateSong(Long id, SongRequest request, Long userId) {

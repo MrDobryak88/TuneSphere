@@ -16,11 +16,11 @@ import java.util.Set;
 @Table(name = "users")
 @Getter
 @Setter
-@SuperBuilder // Используем билдер который использует поля родителя
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true) // Чтобы equals/hashCode учитывали поля из BaseEntity
-@ToString(callSuper = true) // Чтобы toString включал id, createdAt и updatedAt
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+@ToString(callSuper = true)
 
 public class User extends BaseEntity implements UserDetails {
 

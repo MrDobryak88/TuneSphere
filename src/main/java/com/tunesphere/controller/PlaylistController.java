@@ -86,7 +86,6 @@ public class PlaylistController {
         return ResponseEntity.ok(playlistService.removeSongFromPlaylist(id, songId, userId));
     }
 
-    // Вспомогательный метод для получения userId из UserDetails
     private Long getUserIdFromDetails(UserDetails userDetails) {
         if (userDetails instanceof CustomUserDetails customUserDetails) {
             return customUserDetails.getId();

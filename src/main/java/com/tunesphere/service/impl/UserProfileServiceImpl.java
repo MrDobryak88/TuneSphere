@@ -6,11 +6,15 @@ import com.tunesphere.entity.User;
 import com.tunesphere.repository.PlaylistRepository;
 import com.tunesphere.repository.SongRepository;
 import com.tunesphere.repository.UserRepository;
+import com.tunesphere.service.FileStorageService;
 import com.tunesphere.service.absInt.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +24,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     private final SongRepository songRepository;
     private final PlaylistRepository playlistRepository;
     private final PasswordEncoder passwordEncoder;
+    private final FileStorageService fileStorageService;
 
     @Override
     @Transactional(readOnly = true)
@@ -81,5 +86,20 @@ public class UserProfileServiceImpl implements UserProfileService {
                 .playlistsCount(playlistsCount)
                 .followersCount(followersCount)
                 .build();
+    }
+    @Override
+    @Transactional
+    public UserProfileResponse uploadAvatar(Long userId, MultipartFile file) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Сохраняем файл
+        String filename = fileStorageService.saveFile(file, "avatar");
+
+        // Обновляем URL аватара в БД
+        user.setAvatarUrl("/uploads/avatars/" + filename);
+        userRepository.save(user);
+
+        return buildProfile(user);
     }
 }

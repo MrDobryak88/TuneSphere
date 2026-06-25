@@ -18,7 +18,6 @@ public class UserInteractionController {
 
     private final UserInteractionService userInteractionService;
 
-    // ===== ЛАЙКИ =====
     @PostMapping("/likes/songs/{songId}")
     public ResponseEntity<Void> likeSong(
             @PathVariable Long songId,
@@ -41,7 +40,6 @@ public class UserInteractionController {
         return ResponseEntity.ok(userInteractionService.getUserLikedSongs(userDetails.getId()));
     }
 
-    // ===== ИЗБРАННОЕ =====
     @PostMapping("/favorites/songs/{songId}")
     public ResponseEntity<Void> addToFavorites(
             @PathVariable Long songId,
@@ -64,7 +62,6 @@ public class UserInteractionController {
         return ResponseEntity.ok(userInteractionService.getUserFavoriteSongs(userDetails.getId()));
     }
 
-    // ===== ПОДПИСКИ =====
     @PostMapping("/follows/artists/{artistId}")
     public ResponseEntity<Void> followArtist(
             @PathVariable Long artistId,

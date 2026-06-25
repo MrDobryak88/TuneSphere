@@ -18,22 +18,24 @@ public class KafkaConsumerService {
 
     @KafkaListener(topics = "song-played", groupId = "tunesphere-group")
     public void handleSongPlayed(SongPlayedEvent event) {
-        log.info(" Получено событие: songId={}, user={}", event.getSongId(), event.getUsername());
+        log.info("Получено событие: songId={}, user={}", event.getSongId(), event.getUsername());
 
         try {
-            // Сохраняем активность в БД (асинхронно, не блокируя плеер!)
+            if (event.getUserId() == null || event.getUserId() <= 0) {
+                log.warn("Пропуск сохранения активности — некорректный userId");
+                return;
+            }
+
             ActivityLog logUser = ActivityLog.builder()
                     .userId(event.getUserId())
                     .songId(event.getSongId())
                     .action("PLAYED")
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(event.getPlayedAt() != null ? event.getPlayedAt() : LocalDateTime.now())
                     .build();
-
             activityLogRepository.save(logUser);
-            log.info(" Активность сохранена: user {} послушал песню {}",
-                    event.getUserId(), event.getSongId());
+            log.info("Активность сохранена для userId={}", event.getUserId());
         } catch (Exception e) {
-            log.error(" Ошибка сохранения активности: {}", e.getMessage());
+            log.error("Ошибка сохранения активности: {}", e.getMessage(), e);
         }
     }
 }

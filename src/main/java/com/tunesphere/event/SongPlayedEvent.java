@@ -17,5 +17,5 @@ public class SongPlayedEvent {
     private Long userId;
     private String username;
     private LocalDateTime playedAt;
-    private Integer durationSeconds; // сколько секунд слушали
+    private Integer durationSeconds;
 }
